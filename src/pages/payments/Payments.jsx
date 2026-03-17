@@ -19,7 +19,6 @@ const Payments = () => {
   const [formData, setFormData] = useState({
     meter_id: '',
     amount: '',
-    phone_number: '',
   })
 
   useEffect(() => {
@@ -52,37 +51,29 @@ const Payments = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
-      await paymentAPI.initiate({
+      const response = await paymentAPI.initiate({
         ...formData,
       })
-      toast.success('Payment initiated! Please enter your M-Pesa PIN to complete.')
+
+      const token = response.data?.token_code
+      toast.success(
+        token
+          ? `Payment complete! Token: ${token}`
+          : 'Payment completed successfully'
+      )
+
       setShowPaymentModal(false)
-      setFormData({ meter_id: '', amount: '', phone_number: '' })
-      setTimeout(loadPageData, 2000)
-    } catch (error) {
-      toast.error(error.response?.data?.error || error.response?.data?.phone_number?.[0] || 'Failed to initiate payment')
-    }
-  }
-
-  const handleCheckStatus = async (payment) => {
-    if (!payment.mpesa_transaction_id) {
-      toast.error('Missing checkout request ID for this payment')
-      return
-    }
-
-    setCheckingId(payment.id)
-    try {
-      await paymentAPI.checkStatus(payment.mpesa_transaction_id)
-      toast.success('Payment status updated')
+      setFormData({ meter_id: '', amount: '' })
       loadPageData()
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to check payment status')
-    } finally {
-      setCheckingId('')
+      toast.error(error.response?.data?.error || 'Failed to initiate payment')
     }
   }
 
-  const getStatusColor = (status) => {
+  const handleCheckStatus = async () => {
+    toast.info('Payments are simulated and complete immediately; refresh to see updates.')
+  }
+const getStatusColor = (status) => {
     const colors = {
       COMPLETED: 'bg-green-100 text-green-800',
       PENDING: 'bg-yellow-100 text-yellow-800',
@@ -171,6 +162,9 @@ const Payments = () => {
                     Amount
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Token
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Method
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -195,6 +189,24 @@ const Payments = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                       KSh {parseFloat(payment.amount).toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {payment.token_code ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs truncate max-w-[120px]">{payment.token_code}</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(payment.token_code)
+                              toast.success('Token copied to clipboard')
+                            }}
+                            className="text-primary-600 hover:text-primary-800 text-xs"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 text-xs">N/A</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {payment.payment_method}
@@ -295,20 +307,6 @@ const Payments = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              M-Pesa Phone Number
-            </label>
-            <input
-              type="tel"
-              name="phone_number"
-              value={formData.phone_number}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="+254712345678"
-              required
-            />
-          </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">

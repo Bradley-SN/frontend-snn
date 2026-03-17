@@ -67,25 +67,38 @@ const Tokens = () => {
 
   const handleApplyToken = async (e) => {
     e.preventDefault()
-    if (!selectedSerial) {
+
+    const normalizedToken = tokenCode.replace(/\D/g, '')
+    const serialFromMeter = meters.find((m) => m.id === selectedMeterId)?.serial_number
+    const serial = (selectedSerial || serialFromMeter || '').trim()
+
+    if (!serial) {
       toast.error('Select a meter serial number to apply token')
       return
     }
 
+    if (normalizedToken.length !== 16) {
+      toast.error('Token code must be 16 digits')
+      return
+    }
+
     try {
-      const response = await tokenAPI.apply({
-        token_code: tokenCode,
-        serial_number: selectedSerial,
-      })
-      toast.success(response.data?.message || 'Token applied successfully!')
-      setShowApplyModal(false)
+      await tokenAPI.apply({ token_code: normalizedToken, serial_number: serial })
+      toast.success('Token applied successfully')
       setTokenCode('')
       if (selectedMeterId) {
         loadTokenHistory(selectedMeterId)
       }
       loadTokens()
+      setShowApplyModal(false)
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to apply token. Please check the code and try again.')
+      const errorData = error?.response?.data
+      const message =
+        errorData?.error ||
+        (typeof errorData === 'string' ? errorData : JSON.stringify(errorData)) ||
+        'Failed to apply token. Please check the code and try again.'
+      toast.error(message)
+      console.error('Token apply error:', error.response?.data || error)
     }
   }
 
@@ -96,15 +109,22 @@ const Tokens = () => {
       return
     }
 
+    if (tokenCode.length !== 16) {
+      toast.error('Token code must be 16 digits')
+      return
+    }
+
     try {
-      const response = await tokenAPI.verify({
-        token_code: tokenCode,
-        serial_number: selectedSerial,
-      })
+      const response = await tokenAPI.verify({ token_code: tokenCode, serial_number: selectedSerial })
       setVerifyResult(response.data)
-      toast.success(response.data?.valid ? 'Token is valid' : 'Token is not valid')
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to verify token')
+      const errorData = error?.response?.data
+      const message =
+        errorData?.error ||
+        (typeof errorData === 'string' ? errorData : JSON.stringify(errorData)) ||
+        'Failed to verify token'
+      toast.error(message)
+      console.error('Token verify error:', error.response?.data || error)
     }
   }
 
@@ -212,6 +232,7 @@ const Tokens = () => {
               placeholder="Meter serial number"
               readOnly={!isAdmin}
             />
+            <p className="text-xs text-gray-500 mt-1">Make sure the serial matches the selected meter.</p>
           </div>
         </div>
       </Card>
@@ -269,7 +290,7 @@ const Tokens = () => {
                       </span>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
-                      Meter: {token.meter?.serial_number || 'N/A'} • Value: KSh{' '}
+                      Meter: {token.meter_serial || token.meter || 'N/A'} • Value: KSh{' '}
                       {parseFloat(token.value).toFixed(2)}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
@@ -286,6 +307,8 @@ const Tokens = () => {
                   <button
                     onClick={() => {
                       setTokenCode(token.token_code)
+                      setSelectedMeterId(token.meter || '')
+                      setSelectedSerial(token.meter_serial || '')
                       setShowApplyModal(true)
                     }}
                     className="px-4 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 transition-colors"
@@ -337,9 +360,12 @@ const Tokens = () => {
             <input
               type="text"
               value={tokenCode}
-              onChange={(e) => setTokenCode(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 16)
+                setTokenCode(digits)
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-lg"
-              placeholder="XXXX-XXXX-XXXX-XXXX"
+              placeholder="1234123412341234"
               required
             />
           </div>
