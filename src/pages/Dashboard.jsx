@@ -8,6 +8,7 @@ import {
   TrendingUp,
   TrendingDown,
   Battery,
+  Key,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useMeterStore } from '../store/meterStore'
@@ -22,11 +23,13 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [recentPayments, setRecentPayments] = useState([])
+  const [allPayments, setAllPayments] = useState([])
   const [alerts, setAlerts] = useState([])
 
   useEffect(() => {
     loadDashboardData()
   }, [])
+
 
   const loadDashboardData = async () => {
     setLoading(true)
@@ -37,11 +40,16 @@ const Dashboard = () => {
       if (user?.role === 'CUSTOMER') {
         const paymentResponse = await paymentAPI.list({ limit: 5 })
         setRecentPayments(paymentResponse.data.results || [])
+
+        // Fetch full payment list so we can compute exact token count (1 token = KSh 25)
+        const allPaymentsResponse = await paymentAPI.list({ limit: 1000 })
+        setAllPayments(allPaymentsResponse.data.results || [])
       }
 
       // Fetch alerts
       const alertResponse = await meterAPI.getAlerts({ status: 'ACTIVE', limit: 5 })
       setAlerts(alertResponse.data.results || [])
+
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
     } finally {
@@ -78,6 +86,31 @@ const Dashboard = () => {
           Here's an overview of your energy monitoring system
         </p>
       </div>
+
+      {/* Tokens Remaining (large highlight card) */}
+      <Card className="p-0">
+        <div className="p-6 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-600">Tokens Remaining</p>
+            <p className="text-5xl font-bold text-gray-900 mt-2">
+              {(
+                allPayments
+                  .filter((p) => p.status === 'COMPLETED')
+                  .reduce((sum, p) => {
+                    const tokenValue = parseFloat(p.token_value ?? (parseFloat(p.amount || 0) / 25))
+                    return sum + (Number.isFinite(tokenValue) ? tokenValue : 0)
+                  }, 0)
+              ).toFixed(2)}
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              Sum of all payment tokens (1 token = KSh 25). Payments generate tokens when completed.
+            </p>
+          </div>
+          <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center">
+            <Key className="w-8 h-8 text-purple-600" />
+          </div>
+        </div>
+      </Card>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

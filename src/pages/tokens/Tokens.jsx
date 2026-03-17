@@ -70,11 +70,11 @@ const Tokens = () => {
 
     const normalizedToken = tokenCode.replace(/\D/g, '')
     const serialFromMeter = meters.find((m) => m.id === selectedMeterId)?.serial_number
-    const serial = (selectedSerial || serialFromMeter || '').trim()
+    let serial = (selectedSerial || serialFromMeter || '').trim()
 
-    if (!serial) {
-      toast.error('Select a meter serial number to apply token')
-      return
+    // Automatically use the only meter serial if the user only has one meter
+    if (!serial && meters.length === 1) {
+      serial = meters[0].serial_number
     }
 
     if (normalizedToken.length !== 16) {
@@ -83,7 +83,13 @@ const Tokens = () => {
     }
 
     try {
-      await tokenAPI.apply({ token_code: normalizedToken, serial_number: serial })
+      const payload = { token_code: normalizedToken }
+      if (serial) {
+        payload.serial_number = serial
+      }
+
+      console.debug('Applying token payload:', payload)
+      await tokenAPI.apply(payload)
       toast.success('Token applied successfully')
       setTokenCode('')
       if (selectedMeterId) {
@@ -97,7 +103,15 @@ const Tokens = () => {
         errorData?.error ||
         (typeof errorData === 'string' ? errorData : JSON.stringify(errorData)) ||
         'Failed to apply token. Please check the code and try again.'
-      toast.error(message)
+
+      if (message === 'Invalid meter serial number') {
+        toast.error(
+          `Invalid meter serial number (${serial || 'none'}). Please select the meter that generated the token.`
+        )
+      } else {
+        toast.error(message)
+      }
+
       console.error('Token apply error:', error.response?.data || error)
     }
   }
@@ -374,6 +388,10 @@ const Tokens = () => {
             <p className="text-sm text-blue-800">
               <strong>Note:</strong> Make sure the token code is correct. Each token can only
               be used once.
+            </p>
+            <p className="text-xs text-blue-700 mt-1">
+              If you don’t know the meter serial, you can leave it blank and the system will
+              apply the token to the meter it was generated for.
             </p>
           </div>
 
